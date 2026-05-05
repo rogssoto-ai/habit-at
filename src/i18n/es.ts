@@ -81,7 +81,7 @@ export default {
       assign_templates: 'Asignar plantillas (opcional)',
       generate_btn: 'GENERAR',
       copy: 'Copiar',
-      invite_message: '{{coach}} te ha invitado a usar Habit At.\nToca la siguiente liga para descargar y luego\ninicia sesión como usuario usando la clave: {{code}}\nhttps://habit-at.expo.app',
+      invite_message: '{{coach}} te ha invitado a usar Habit At.\nInicia sesión como usuario en:\nhttps://habit-at-a57c4.web.app\nUsando la clave: {{code}}',
       upgrade_required: 'Has alcanzado el límite de tu plan. Haz upgrade para agregar más usuarios.',
       upgrade_btn: 'Ver planes',
     },
