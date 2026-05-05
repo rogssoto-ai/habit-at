@@ -37,6 +37,9 @@ export default {
     key_valid: 'Valid key ✓',
     key_invalid: 'Check your key and try again',
     returning_user: 'I have signed in before with a coach key',
+    key_already_used: 'This invitation key has already been used',
+    invitation_not_found: 'Invitation not found',
+    returning_not_found: 'Account not found. Please use your invitation key.',
   },
 
   // Coach

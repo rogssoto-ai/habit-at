@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   TextInput, Alert, ActivityIndicator, Platform
@@ -7,13 +7,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuth } from '../../store/AuthContext';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import {
+  collection, doc, getDoc, getDocs, query,
+  where, setDoc, updateDoc, serverTimestamp
+} from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { signInWithGoogle, getGoogleRedirectResult } from '../../auth/googleSignIn';
+import { signInWithGoogle } from '../../auth/googleSignIn';
 
-const RETURNING_USER_KEY = '@habit_at_returning_user';
-const PENDING_KEY_REDIRECT = '@habit_at_pending_key';
+const ROLE_KEY = '@habit_at_role';
 
 interface Props {
   onBack: () => void;
@@ -23,24 +25,12 @@ interface Props {
 export default function UserLoginScreen({ onBack, onSuccess }: Props) {
   const { t } = useTranslation();
   const { theme } = useTheme();
-  const { setRole } = useAuth();
+  const { setRole, refreshUserData } = useAuth();
   const [key, setKey] = useState('');
   const [keyStatus, setKeyStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
   const [validatingKey, setValidatingKey] = useState(false);
   const [returningUser, setReturningUser] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  // Captura el resultado del redirect de Google al volver (solo web)
-  useEffect(() => {
-    const checkRedirect = async () => {
-      const result = await getGoogleRedirectResult().catch(() => null);
-      if (!result?.user) return;
-      const pendingKey = await AsyncStorage.getItem(PENDING_KEY_REDIRECT);
-      await AsyncStorage.removeItem(PENDING_KEY_REDIRECT);
-      await handlePostAuth(pendingKey);
-    };
-    checkRedirect();
-  }, []);
 
   const formatKey = (text: string) => {
     const clean = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -57,16 +47,8 @@ export default function UserLoginScreen({ onBack, onSuccess }: Props) {
     if (key.length !== 9) { setKeyStatus('invalid'); return; }
     setValidatingKey(true);
     try {
-      const keysRef = collection(db, 'keys');
-      const q = query(keysRef, where('__name__', '==', key));
-      const snap = await getDocs(q);
-      if (!snap.empty && snap.docs[0].data().status === 'in_use') {
-        setKeyStatus('valid');
-      } else {
-        const invSnap = await getDocs(keysRef);
-        const found = invSnap.docs.find(d => d.id === key && d.data().status !== 'available');
-        setKeyStatus(found ? 'valid' : 'invalid');
-      }
+      const snap = await getDoc(doc(db, 'keys', key));
+      setKeyStatus(snap.exists() && snap.data().status === 'pending' ? 'valid' : 'invalid');
     } catch {
       setKeyStatus('invalid');
     } finally {
@@ -76,35 +58,64 @@ export default function UserLoginScreen({ onBack, onSuccess }: Props) {
 
   const canContinue = keyStatus === 'valid' || returningUser;
 
-  const handlePostAuth = async (validatedKey?: string | null) => {
-    try {
-      await AsyncStorage.setItem(RETURNING_USER_KEY, 'true');
-      setRole('user');
-      onSuccess();
-    } catch (e: any) {
-      Alert.alert(t('common.error'), e.message);
-    } finally {
-      setLoading(false);
+  const linkNewUser = async (user: any, invitationCode: string) => {
+    const keySnap = await getDoc(doc(db, 'keys', invitationCode));
+    if (!keySnap.exists() || keySnap.data().status !== 'pending') {
+      throw new Error(t('auth.key_already_used'));
     }
+    const coachId: string = keySnap.data().coachId;
+
+    const invSnap = await getDocs(
+      query(collection(db, 'coaches', coachId, 'invitations'), where('code', '==', invitationCode))
+    );
+    if (invSnap.empty) throw new Error(t('auth.invitation_not_found'));
+    const invitationId = invSnap.docs[0].id;
+
+    await updateDoc(doc(db, 'keys', invitationCode), {
+      status: 'active',
+      userId: user.uid,
+    });
+    await updateDoc(doc(db, 'coaches', coachId, 'invitations', invitationId), {
+      status: 'active',
+      activatedAt: serverTimestamp(),
+      googleUid: user.uid,
+      googleEmail: user.email,
+    });
+    await setDoc(doc(db, 'coaches', coachId, 'users', user.uid), {
+      googleEmail: user.email,
+      googleUid: user.uid,
+      coachId,
+      invitationId,
+      streak_followup: 0,
+      streak_completion: 0,
+      createdAt: serverTimestamp(),
+    });
+    // Top-level lookup doc so AuthContext can find this user by UID
+    await setDoc(doc(db, 'users', user.uid), { coachId, invitationId });
   };
 
   const handleGoogleSignIn = async () => {
     if (!canContinue) return;
     setLoading(true);
     try {
-      if (Platform.OS === 'web') {
-        // Guardar la clave y pantalla antes del redirect — el estado del componente se pierde
-        await AsyncStorage.setItem(PENDING_KEY_REDIRECT, key);
-      }
       const result = await signInWithGoogle();
-      if (result?.user) {
-        // Nativo: resultado inmediato
-        await handlePostAuth(key);
+      if (!result?.user) { setLoading(false); return; }
+      const user = result.user;
+
+      if (returningUser) {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (!snap.exists()) throw new Error(t('auth.returning_not_found'));
+      } else {
+        await linkNewUser(user, key);
       }
-      // Web: result es null — el navegador redirigió, useEffect lo maneja al volver
+
+      await AsyncStorage.setItem(ROLE_KEY, 'user');
+      await refreshUserData(user.uid);
+      setRole('user');
     } catch (e: any) {
-      await AsyncStorage.removeItem(PENDING_KEY_REDIRECT);
-      Alert.alert(t('common.error'), e.message);
+      if ((e as any).code !== 'auth/popup-closed-by-user') {
+        Alert.alert(t('common.error'), e.message);
+      }
       setLoading(false);
     }
   };
@@ -120,38 +131,42 @@ export default function UserLoginScreen({ onBack, onSuccess }: Props) {
           {t('auth.user_login_title')}
         </Text>
 
-        <View style={styles.keyRow}>
-          <TextInput
-            style={[styles.keyInput, { borderColor: theme.accent, color: theme.textPrimary, backgroundColor: theme.surface }]}
-            value={key}
-            onChangeText={handleKeyChange}
-            placeholder={t('auth.key_placeholder')}
-            placeholderTextColor={theme.textSecondary}
-            maxLength={9}
-            autoCapitalize="characters"
-          />
-          <TouchableOpacity
-            style={[styles.validateBtn, { backgroundColor: theme.accent }]}
-            onPress={validateKey}
-            disabled={validatingKey || key.length !== 9}
-          >
-            {validatingKey
-              ? <ActivityIndicator color="#fff" size="small" />
-              : <Text style={styles.validateText}>{t('auth.validate_key')}</Text>
-            }
-          </TouchableOpacity>
-        </View>
+        {!returningUser && (
+          <>
+            <View style={styles.keyRow}>
+              <TextInput
+                style={[styles.keyInput, { borderColor: theme.accent, color: theme.textPrimary, backgroundColor: theme.surface }]}
+                value={key}
+                onChangeText={handleKeyChange}
+                placeholder={t('auth.key_placeholder')}
+                placeholderTextColor={theme.textSecondary}
+                maxLength={9}
+                autoCapitalize="characters"
+              />
+              <TouchableOpacity
+                style={[styles.validateBtn, { backgroundColor: theme.accent }]}
+                onPress={validateKey}
+                disabled={validatingKey || key.length !== 9}
+              >
+                {validatingKey
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={styles.validateText}>{t('auth.validate_key')}</Text>
+                }
+              </TouchableOpacity>
+            </View>
 
-        {keyStatus === 'valid' && (
-          <Text style={[styles.keyMsg, { color: '#16A34A' }]}>{t('auth.key_valid')}</Text>
-        )}
-        {keyStatus === 'invalid' && (
-          <Text style={[styles.keyMsg, { color: '#EF4444' }]}>{t('auth.key_invalid')}</Text>
+            {keyStatus === 'valid' && (
+              <Text style={[styles.keyMsg, { color: '#16A34A' }]}>{t('auth.key_valid')}</Text>
+            )}
+            {keyStatus === 'invalid' && (
+              <Text style={[styles.keyMsg, { color: '#EF4444' }]}>{t('auth.key_invalid')}</Text>
+            )}
+          </>
         )}
 
         <TouchableOpacity
           style={styles.checkRow}
-          onPress={() => setReturningUser(!returningUser)}
+          onPress={() => { setReturningUser(!returningUser); setKeyStatus('idle'); setKey(''); }}
           activeOpacity={0.7}
         >
           <View style={[
@@ -181,7 +196,6 @@ export default function UserLoginScreen({ onBack, onSuccess }: Props) {
               </Text>
           }
         </TouchableOpacity>
-
       </View>
     </SafeAreaView>
   );

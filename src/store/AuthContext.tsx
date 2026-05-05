@@ -37,6 +37,7 @@ interface AuthContextType extends AuthState {
   signOut: () => Promise<void>;
   setRole: (role: UserRole) => void;
   refreshCoachData: () => Promise<void>;
+  refreshUserData: (uid: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -91,9 +92,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function fetchUserData(uid: string): Promise<UserData | null> {
-    // Users are nested, find by googleUid
-    // For now return null, full lookup implemented in Firestore hooks
-    return null;
+    try {
+      const lookupSnap = await getDoc(doc(db, 'users', uid));
+      if (!lookupSnap.exists()) return null;
+      const { coachId, invitationId } = lookupSnap.data();
+      const userSnap = await getDoc(doc(db, 'coaches', coachId, 'users', uid));
+      if (!userSnap.exists()) return null;
+      return { id: uid, ...userSnap.data() } as UserData;
+    } catch {
+      return null;
+    }
+  }
+
+  async function refreshUserData(uid: string) {
+    const userData = await fetchUserData(uid);
+    setState(s => ({ ...s, userData }));
   }
 
   async function refreshCoachData() {
@@ -115,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ ...state, signOut, setRole, refreshCoachData }}>
+    <AuthContext.Provider value={{ ...state, signOut, setRole, refreshCoachData, refreshUserData }}>
       {children}
     </AuthContext.Provider>
   );

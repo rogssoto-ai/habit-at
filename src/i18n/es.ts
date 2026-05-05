@@ -37,6 +37,9 @@ export default {
     key_valid: 'Clave válida ✓',
     key_invalid: 'Verifica tu clave e intenta de nuevo',
     returning_user: 'Ya ingresé antes con clave de coach',
+    key_already_used: 'Esta clave ya fue utilizada',
+    invitation_not_found: 'Invitación no encontrada',
+    returning_not_found: 'No se encontró tu cuenta. Usa tu clave de invitación.',
   },
 
   // Coach
