@@ -77,7 +77,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Procesar el redirect de Google primero (si existe) y luego montar el listener.
     // Sin esta llamada, signInWithRedirect nunca finaliza la autenticación.
     getRedirectResult(auth)
-      .catch(() => {})
+      .then(result => {
+        console.log('[Auth] getRedirectResult:', result ? result.user.email : 'null');
+      })
+      .catch(err => {
+        console.error('[Auth] getRedirectResult error:', err.code, err.message);
+      })
       .finally(() => {
         if (!mounted) return;
         unsub = onAuthStateChanged(auth, setupAuth);
