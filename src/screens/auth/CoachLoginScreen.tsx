@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  TextInput, Modal, Alert, ActivityIndicator
+  TextInput, Modal, Alert, ActivityIndicator, Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuth } from '../../store/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { signInWithGoogle } from '../../auth/googleSignIn';
@@ -48,11 +49,17 @@ export default function CoachLoginScreen({ onBack, onSuccess }: Props) {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
+      if (Platform.OS === 'web') {
+        // Guardar rol antes del redirect para que onAuthStateChanged lo encuentre al volver
+        await AsyncStorage.setItem('@habit_at_role', 'coach');
+      }
       const result = await signInWithGoogle();
       if (result?.user) {
+        // Nativo: resultado inmediato
         await handlePostAuth(result.user);
       }
     } catch (e: any) {
+      if (Platform.OS === 'web') await AsyncStorage.removeItem('@habit_at_role');
       Alert.alert(t('common.error'), e.message);
       setLoading(false);
     }

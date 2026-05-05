@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import {
-  GoogleAuthProvider, signInWithPopup,
+  GoogleAuthProvider, signInWithRedirect,
   signInWithCredential, UserCredential
 } from 'firebase/auth';
 import { auth } from '../firebase/config';
@@ -12,12 +12,14 @@ if (Platform.OS !== 'web') {
   });
 }
 
-// En web: abre popup de Google y retorna el resultado de inmediato
-// En nativo: usa el SDK nativo
+// En web: redirige a Google. El rol debe guardarse en AsyncStorage ANTES de llamar
+// esto para que onAuthStateChanged lo encuentre al volver.
+// En nativo: usa el SDK nativo y retorna UserCredential de inmediato.
 export async function signInWithGoogle(): Promise<UserCredential | null> {
   if (Platform.OS === 'web') {
     const provider = new GoogleAuthProvider();
-    return signInWithPopup(auth, provider);
+    await signInWithRedirect(auth, provider);
+    return null;
   }
   const { GoogleSignin } = require('@react-native-google-signin/google-signin');
   await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
@@ -28,7 +30,6 @@ export async function signInWithGoogle(): Promise<UserCredential | null> {
   return signInWithCredential(auth, credential);
 }
 
-// Ya no se usa con popup — se mantiene por compatibilidad con llamadas existentes
 export async function getGoogleRedirectResult(): Promise<UserCredential | null> {
   return null;
 }
