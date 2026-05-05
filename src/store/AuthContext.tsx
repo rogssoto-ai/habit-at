@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { onAuthStateChanged, getRedirectResult, User, signOut as firebaseSignOut } from 'firebase/auth';
+import { onAuthStateChanged, User, signOut as firebaseSignOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    let unsub: (() => void) | undefined;
+    let unsub: (() => void);
     let mounted = true;
 
     const setupAuth = async (user: User | null) => {
@@ -74,23 +74,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    // Procesar el redirect de Google primero (si existe) y luego montar el listener.
-    // Sin esta llamada, signInWithRedirect nunca finaliza la autenticación.
-    getRedirectResult(auth)
-      .then(result => {
-        console.log('[Auth] getRedirectResult:', result ? result.user.email : 'null');
-      })
-      .catch(err => {
-        console.error('[Auth] getRedirectResult error:', err.code, err.message);
-      })
-      .finally(() => {
-        if (!mounted) return;
-        unsub = onAuthStateChanged(auth, setupAuth);
-      });
+    unsub = onAuthStateChanged(auth, setupAuth);
 
     return () => {
       mounted = false;
-      if (unsub) unsub();
+      unsub();
     };
   }, []);
 
