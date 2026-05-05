@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemeProvider, useTheme } from './src/theme/ThemeContext';
 import { OnboardingProvider, useOnboarding } from './src/store/OnboardingContext';
 import { AuthProvider, useAuth } from './src/store/AuthContext';
@@ -24,12 +25,22 @@ function AppContent() {
   const { firebaseUser, role, loading: authLoading } = useAuth();
   const [authScreen, setAuthScreen] = useState<AuthScreen>('select');
   const [i18nReady, setI18nReady] = useState(false);
+  const [screenRestored, setScreenRestored] = useState(false);
 
   useEffect(() => {
     initI18n().then(() => setI18nReady(true));
   }, []);
 
-  const isLoading = !i18nReady || onboardingLoading || authLoading;
+  useEffect(() => {
+    AsyncStorage.getItem('@habit_at_pending_screen').then(screen => {
+      if (screen === 'coach_login' || screen === 'user_login') {
+        setAuthScreen(screen as AuthScreen);
+      }
+      setScreenRestored(true);
+    });
+  }, []);
+
+  const isLoading = !i18nReady || onboardingLoading || authLoading || !screenRestored;
 
   if (isLoading) {
     return (

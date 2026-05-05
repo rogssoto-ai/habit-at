@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
-  TextInput, Modal, Alert, ActivityIndicator
+  TextInput, Modal, Alert, ActivityIndicator, Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuth } from '../../store/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { signInWithGoogle, getGoogleRedirectResult } from '../../auth/googleSignIn';
@@ -28,8 +29,13 @@ export default function CoachLoginScreen({ onBack, onSuccess }: Props) {
   // Captura el resultado del redirect de Google al volver (solo web)
   useEffect(() => {
     getGoogleRedirectResult()
-      .then(result => { if (result?.user) handlePostAuth(result.user); })
-      .catch(() => {});
+      .then(async result => {
+        if (result?.user) {
+          await AsyncStorage.removeItem('@habit_at_pending_screen');
+          handlePostAuth(result.user);
+        }
+      })
+      .catch(() => AsyncStorage.removeItem('@habit_at_pending_screen'));
   }, []);
 
   const handlePostAuth = async (user: any) => {
@@ -54,6 +60,9 @@ export default function CoachLoginScreen({ onBack, onSuccess }: Props) {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
+      if (Platform.OS === 'web') {
+        await AsyncStorage.setItem('@habit_at_pending_screen', 'coach_login');
+      }
       const result = await signInWithGoogle();
       if (result?.user) {
         // Nativo: resultado inmediato
@@ -61,6 +70,7 @@ export default function CoachLoginScreen({ onBack, onSuccess }: Props) {
       }
       // Web: result es null — el navegador redirigió, useEffect lo maneja al volver
     } catch (e: any) {
+      await AsyncStorage.removeItem('@habit_at_pending_screen');
       Alert.alert(t('common.error'), e.message);
       setLoading(false);
     }

@@ -37,6 +37,7 @@ export default function UserLoginScreen({ onBack, onSuccess }: Props) {
       if (!result?.user) return;
       const pendingKey = await AsyncStorage.getItem(PENDING_KEY_REDIRECT);
       await AsyncStorage.removeItem(PENDING_KEY_REDIRECT);
+      await AsyncStorage.removeItem('@habit_at_pending_screen');
       await handlePostAuth(pendingKey);
     };
     checkRedirect();
@@ -93,8 +94,9 @@ export default function UserLoginScreen({ onBack, onSuccess }: Props) {
     setLoading(true);
     try {
       if (Platform.OS === 'web') {
-        // Guardar la clave antes del redirect — el estado del componente se pierde
+        // Guardar la clave y pantalla antes del redirect — el estado del componente se pierde
         await AsyncStorage.setItem(PENDING_KEY_REDIRECT, key);
+        await AsyncStorage.setItem('@habit_at_pending_screen', 'user_login');
       }
       const result = await signInWithGoogle();
       if (result?.user) {
