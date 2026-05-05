@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "829198836456",
+    "project_id": "habit-at-a57c4",
+    "storage_bucket": "habit-at-a57c4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:829198836456:android:39a60fd52a8567ee8a5f5d",
+        "android_client_info": {
+          "package_name": "com.habitat.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "829198836456-tjqr8u6ja3gtv9v8gkf9elpn8hrtnv3l.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC-UIBTv6AOKLCYku34pdkx9Twtiu3-X5w"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "829198836456-tjqr8u6ja3gtv9v8gkf9elpn8hrtnv3l.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
