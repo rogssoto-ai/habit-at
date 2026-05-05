@@ -51,7 +51,8 @@ function AppContent() {
   }
 
   // 2. ¿El usuario está logueado?
-  if (!firebaseUser) {
+  // Show login screens when either no firebase user, or user is logged in but has no role yet
+  if (!firebaseUser || (!role && authScreen !== 'select')) {
     if (authScreen === 'coach_login') {
       return (
         <CoachLoginScreen
