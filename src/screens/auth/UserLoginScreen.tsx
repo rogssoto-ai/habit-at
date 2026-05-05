@@ -99,22 +99,28 @@ export default function UserLoginScreen({ onBack, onSuccess }: Props) {
     setLoading(true);
     try {
       const result = await signInWithGoogle();
+      console.log('[UserLogin] popup result:', result?.user?.email ?? 'null');
       if (!result?.user) { setLoading(false); return; }
       const user = result.user;
 
       if (returningUser) {
+        console.log('[UserLogin] returning user lookup...');
         const snap = await getDoc(doc(db, 'users', user.uid));
         if (!snap.exists()) throw new Error(t('auth.returning_not_found'));
       } else {
+        console.log('[UserLogin] linking new user with key:', key);
         await linkNewUser(user, key);
+        console.log('[UserLogin] linkNewUser done');
       }
 
       await AsyncStorage.setItem(ROLE_KEY, 'user');
       await refreshUserData(user.uid);
+      console.log('[UserLogin] setRole user');
       setRole('user');
     } catch (e: any) {
+      console.error('[UserLogin] error:', (e as any).code, (e as any).message, e);
       if ((e as any).code !== 'auth/popup-closed-by-user') {
-        Alert.alert(t('common.error'), e.message);
+        Alert.alert(t('common.error'), (e as any).message || 'Unknown error');
       }
       setLoading(false);
     }
