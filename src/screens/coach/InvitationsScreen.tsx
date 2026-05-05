@@ -11,6 +11,7 @@ import { useAuth } from '../../store/AuthContext';
 import {
   collection, onSnapshot, addDoc, doc, setDoc, serverTimestamp, getDocs
 } from 'firebase/firestore';
+
 import { db } from '../../firebase/config';
 
 const PLAN_LIMITS: Record<string, number> = {
@@ -75,7 +76,7 @@ export default function InvitationsScreen() {
         attempts++;
       }
 
-      await addDoc(collection(db, 'coaches', firebaseUser.uid, 'invitations'), {
+      const invRef = await addDoc(collection(db, 'coaches', firebaseUser.uid, 'invitations'), {
         code,
         status: 'pending',
         coachDisplayName: coachData.displayName,
@@ -88,6 +89,7 @@ export default function InvitationsScreen() {
       await setDoc(doc(db, 'keys', code), {
         status: 'pending',
         coachId: firebaseUser.uid,
+        invitationId: invRef.id,
         userId: null,
       });
 

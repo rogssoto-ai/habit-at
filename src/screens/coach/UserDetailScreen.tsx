@@ -52,7 +52,7 @@ export default function UserDetailScreen({ invitation, onBack }: Props) {
       </View>
 
       <View style={{ flex: 1 }}>
-        {tab === 'info' && <UserInfoTab invitation={invitation} />}
+        {tab === 'info' && <UserInfoTab invitation={invitation} onUnlinked={onBack} />}
         {tab === 'habits' && <UserHabitsTab invitation={invitation} />}
         {tab === 'monitor' && <UserMonitorTab invitation={invitation} />}
       </View>

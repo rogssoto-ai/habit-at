@@ -7,10 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuth } from '../../store/AuthContext';
-import {
-  collection, doc, getDoc, getDocs, query,
-  where, setDoc, updateDoc, serverTimestamp
-} from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { signInWithGoogle } from '../../auth/googleSignIn';
@@ -63,35 +60,30 @@ export default function UserLoginScreen({ onBack, onSuccess }: Props) {
     if (!keySnap.exists() || keySnap.data().status !== 'pending') {
       throw new Error(t('auth.key_already_used'));
     }
-    const coachId: string = keySnap.data().coachId;
+    const { coachId, invitationId } = keySnap.data() as { coachId: string; invitationId?: string };
 
-    const invSnap = await getDocs(
-      query(collection(db, 'coaches', coachId, 'invitations'), where('code', '==', invitationCode))
-    );
-    if (invSnap.empty) throw new Error(t('auth.invitation_not_found'));
-    const invitationId = invSnap.docs[0].id;
+    await updateDoc(doc(db, 'keys', invitationCode), { status: 'active', userId: user.uid });
 
-    await updateDoc(doc(db, 'keys', invitationCode), {
-      status: 'active',
-      userId: user.uid,
-    });
-    await updateDoc(doc(db, 'coaches', coachId, 'invitations', invitationId), {
-      status: 'active',
-      activatedAt: serverTimestamp(),
-      googleUid: user.uid,
-      googleEmail: user.email,
-    });
+    if (invitationId) {
+      await updateDoc(doc(db, 'coaches', coachId, 'invitations', invitationId), {
+        status: 'active',
+        activatedAt: serverTimestamp(),
+        googleUid: user.uid,
+        googleEmail: user.email,
+      });
+    }
+
+    const resolvedInvitationId = invitationId ?? invitationCode;
     await setDoc(doc(db, 'coaches', coachId, 'users', user.uid), {
       googleEmail: user.email,
       googleUid: user.uid,
       coachId,
-      invitationId,
+      invitationId: resolvedInvitationId,
       streak_followup: 0,
       streak_completion: 0,
       createdAt: serverTimestamp(),
     });
-    // Top-level lookup doc so AuthContext can find this user by UID
-    await setDoc(doc(db, 'users', user.uid), { coachId, invitationId });
+    await setDoc(doc(db, 'users', user.uid), { coachId, invitationId: resolvedInvitationId });
   };
 
   const handleGoogleSignIn = async () => {
@@ -99,26 +91,20 @@ export default function UserLoginScreen({ onBack, onSuccess }: Props) {
     setLoading(true);
     try {
       const result = await signInWithGoogle();
-      console.log('[UserLogin] popup result:', result?.user?.email ?? 'null');
       if (!result?.user) { setLoading(false); return; }
       const user = result.user;
 
       if (returningUser) {
-        console.log('[UserLogin] returning user lookup...');
         const snap = await getDoc(doc(db, 'users', user.uid));
         if (!snap.exists()) throw new Error(t('auth.returning_not_found'));
       } else {
-        console.log('[UserLogin] linking new user with key:', key);
         await linkNewUser(user, key);
-        console.log('[UserLogin] linkNewUser done');
       }
 
       await AsyncStorage.setItem(ROLE_KEY, 'user');
       await refreshUserData(user.uid);
-      console.log('[UserLogin] setRole user');
       setRole('user');
     } catch (e: any) {
-      console.error('[UserLogin] error:', (e as any).code, (e as any).message, e);
       if ((e as any).code !== 'auth/popup-closed-by-user') {
         Alert.alert(t('common.error'), (e as any).message || 'Unknown error');
       }
