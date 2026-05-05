@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Modal, Alert
+  TextInput, Modal, Alert, Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -32,10 +32,14 @@ export default function CoachSettingsScreen() {
   };
 
   const confirmSignOut = () => {
-    Alert.alert(t('settings.sign_out'), undefined, [
-      { text: t('settings.cancel'), style: 'cancel' },
-      { text: t('settings.confirm'), onPress: signOut },
-    ]);
+    if (Platform.OS === 'web') {
+      if (window.confirm(t('settings.sign_out') + '?')) signOut();
+    } else {
+      Alert.alert(t('settings.sign_out'), undefined, [
+        { text: t('settings.cancel'), style: 'cancel' },
+        { text: t('settings.confirm'), onPress: signOut },
+      ]);
+    }
   };
 
   const confirmReset = () => {
