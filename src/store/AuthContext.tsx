@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { onAuthStateChanged, User, signOut as firebaseSignOut } from 'firebase/auth';
+import { onAuthStateChanged, getRedirectResult, User, signOut as firebaseSignOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -53,23 +53,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
+    let unsub: (() => void) | undefined;
+    let mounted = true;
+
+    const setupAuth = async (user: User | null) => {
+      if (!mounted) return;
       if (user) {
         const savedRole = await AsyncStorage.getItem(ROLE_KEY) as UserRole;
         if (savedRole === 'coach') {
           const coachData = await fetchCoachData(user.uid);
-          setState(s => ({ ...s, firebaseUser: user, role: 'coach', coachData, loading: false }));
+          if (mounted) setState(s => ({ ...s, firebaseUser: user, role: 'coach', coachData, loading: false }));
         } else if (savedRole === 'user') {
           const userData = await fetchUserData(user.uid);
-          setState(s => ({ ...s, firebaseUser: user, role: 'user', userData, loading: false }));
+          if (mounted) setState(s => ({ ...s, firebaseUser: user, role: 'user', userData, loading: false }));
         } else {
-          setState(s => ({ ...s, firebaseUser: user, role: null, loading: false }));
+          if (mounted) setState(s => ({ ...s, firebaseUser: user, role: null, loading: false }));
         }
       } else {
-        setState(s => ({ ...s, firebaseUser: null, role: null, coachData: null, userData: null, loading: false }));
+        if (mounted) setState(s => ({ ...s, firebaseUser: null, role: null, coachData: null, userData: null, loading: false }));
       }
-    });
-    return unsub;
+    };
+
+    // Procesar el redirect de Google primero (si existe) y luego montar el listener.
+    // Sin esta llamada, signInWithRedirect nunca finaliza la autenticación.
+    getRedirectResult(auth)
+      .catch(() => {})
+      .finally(() => {
+        if (!mounted) return;
+        unsub = onAuthStateChanged(auth, setupAuth);
+      });
+
+    return () => {
+      mounted = false;
+      if (unsub) unsub();
+    };
   }, []);
 
   async function fetchCoachData(uid: string): Promise<CoachData | null> {
